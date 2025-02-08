@@ -1,5 +1,14 @@
 [![SVG Banners](https://svg-banners.vercel.app/api?type=origin&text1=CosyVoice🤠&text2=Text-to-Speech%20💖%20Large%20Language%20Model&width=800&height=210)](https://github.com/Akshay090/svg-banners)
 
+## 接口地址
+
+[示例指令](./示例指令.html)
+```
+python api.py
+
+http://localhost:9880/?text=等我这边<strong>接好</strong>后[laughter]给到游戏，他们再提供[breath]测试环境吧&speaker=嘉然&instruct=郑州话，快速
+```
+
 ## 👉🏻 CosyVoice 👈🏻
 **CosyVoice 2.0**: [Demos](https://funaudiollm.github.io/cosyvoice2/); [Paper](https://arxiv.org/abs/2412.10117); [Modelscope](https://www.modelscope.cn/studios/iic/CosyVoice2-0.5B); [HuggingFace](https://huggingface.co/spaces/FunAudioLLM/CosyVoice2-0.5B)
 
