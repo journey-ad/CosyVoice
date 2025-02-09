@@ -18,33 +18,16 @@ from tqdm import tqdm
 from hyperpyyaml import load_hyperpyyaml
 from modelscope import snapshot_download
 import torch
+import torchaudio
 from cosyvoice.cli.frontend import CosyVoiceFrontEnd
 from cosyvoice.cli.model import CosyVoiceModel, CosyVoice2Model
 from cosyvoice.utils.file_utils import logging
 from cosyvoice.utils.class_utils import get_model_type
-import torch
-import torchaudio
 
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.abspath(os.path.join(current_dir, os.pardir))
 grandparent_dir = os.path.dirname(parent_dir)
-
-
-
-def time_it(func):
-  """
-  这是一个装饰器，用来计算类方法运行的时长，单位秒.
-  """
-  def wrapper(self, *args, **kwargs):
-    start_time = time.time()
-    result = func(self, *args, **kwargs)
-    end_time = time.time()
-    duration = end_time - start_time
-    print(f"推理方法 {func.__name__} 运行时长: {duration:.4f} 秒")
-    return result
-  return wrapper
-
 
 def ms_to_srt_time(ms):
     N = int(ms)
@@ -55,11 +38,11 @@ def ms_to_srt_time(ms):
     # print(timesrt)
     return timesrt
 
-
 class CosyVoice:
 
     def __init__(self, model_dir, load_jit=False, load_trt=False, fp16=False):
         self.instruct = True if '-Instruct' in model_dir else False
+        self.is_05b = True if 'CosyVoice2-0.5B' in model_dir else False
         self.model_dir = model_dir
         self.fp16 = fp16
         if not os.path.exists(model_dir):
@@ -105,88 +88,127 @@ class CosyVoice:
         
         for i in tqdm(self.frontend.text_normalize(tts_text, split=True, text_frontend=text_frontend)):
 
+            # 根据音色ID获取模型输入
+            spk = default_voices[0] if spk_id not in default_voices else spk_id
+            model_input = self.frontend.frontend_sft(i, spk)
+
+            # 如果是自定义音色,加载并更新音色相关特征
             if spk_id not in default_voices:
-
-                model_input = self.frontend.frontend_sft(i, default_voices[0])
-                newspk = torch.load(f'{grandparent_dir}/voices/{spk_id}.pt', map_location=torch.device('cuda' if torch.cuda.is_available() else 'cpu'))
-
-                model_input["flow_embedding"] = newspk["flow_embedding"] 
-                model_input["llm_embedding"] = newspk["llm_embedding"]
-
-                model_input["llm_prompt_speech_token"] = newspk["llm_prompt_speech_token"]
-                model_input["llm_prompt_speech_token_len"] = newspk["llm_prompt_speech_token_len"]
-
-                model_input["flow_prompt_speech_token"] = newspk["flow_prompt_speech_token"]
-                model_input["flow_prompt_speech_token_len"] = newspk["flow_prompt_speech_token_len"]
-
-                model_input["prompt_speech_feat_len"] = newspk["prompt_speech_feat_len"]
-                model_input["prompt_speech_feat"] = newspk["prompt_speech_feat"]
-                model_input["prompt_text"] = newspk["prompt_text"]
-                model_input["prompt_text_len"] = newspk["prompt_text_len"]
+                newspk = torch.load(
+                    f'{grandparent_dir}/voices/{spk_id}.pt',
+                    map_location=torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+                )
                 
-            else:
-                model_input = self.frontend.frontend_sft(i, spk_id)
-            
+                # 更新模型输入中的音色特征
+                spk_fields = [
+                    "flow_embedding", "llm_embedding",
+                    "llm_prompt_speech_token", "llm_prompt_speech_token_len",
+                    "flow_prompt_speech_token", "flow_prompt_speech_token_len", 
+                    "prompt_speech_feat_len", "prompt_speech_feat",
+                    "prompt_text", "prompt_text_len"
+                ]
+                
+                for field in spk_fields:
+                    model_input[field] = newspk[field]
+
             start_time = time.time()
-            logging.info('synthesis text {}'.format(i))
+            logging.info(f'正在合成文本: {i}')
+            
             for model_output in self.model.tts(**model_input, stream=stream, speed=speed):
-                speech_len = model_output['tts_speech'].shape[1] / self.sample_rate
-                logging.info('yield speech len {}, rtf {}'.format(speech_len, (time.time() - start_time) / speech_len))
+                speech = model_output['tts_speech']
+                speech_len = speech.shape[1] / self.sample_rate
+                rtf = (time.time() - start_time) / speech_len
+                logging.info(f'生成语音长度: {speech_len:.2f}秒, RTF: {rtf:.2f}')
+
+                # 转换音频数据
+                audio = speech.numpy().ravel()
                 
-                # 使用 .numpy() 方法将 tensor 转换为 numpy 数组
-                numpy_array = model_output['tts_speech'].numpy()
-                # 使用 np.ravel() 方法将多维数组展平成一维数组
-                audio = numpy_array.ravel()
-                print(audio)
-                srtline_begin=ms_to_srt_time(audio_samples*1000.0 / self.sample_rate)
+                # 计算时间戳
+                srtline_begin = ms_to_srt_time(audio_samples * 1000.0 / self.sample_rate)
                 audio_samples += audio.size
-                srtline_end=ms_to_srt_time(audio_samples*1000.0 / self.sample_rate)
-                audio_opt.append(audio)
-
-                srtlines.append(f"{len(audio_opt):02d}\n")
-                srtlines.append(srtline_begin+' --> '+srtline_end+"\n")
-
-                srtlines.append(i.replace("、。","")+"\n\n")
-
-                tts_speeches.append(model_output['tts_speech'])
-
+                srtline_end = ms_to_srt_time(audio_samples * 1000.0 / self.sample_rate)
                 
+                # 保存音频和字幕数据
+                audio_opt.append(audio)
+                tts_speeches.append(speech)
+                
+                # 生成字幕
+                srt_index = len(audio_opt)
+                srtlines.extend([
+                    f"{srt_index:02d}\n",
+                    f"{srtline_begin} --> {srtline_end}\n",
+                    f"{i.replace('、。', '')}\n\n"
+                ])
+
                 yield model_output
                 start_time = time.time()
             
+            # 合并并保存音频
             audio_data = torch.concat(tts_speeches, dim=1)
-
+            os.makedirs("音频输出", exist_ok=True)
             torchaudio.save("音频输出/output.wav", audio_data, self.sample_rate)
+            
+            # 保存字幕文件
             with open('音频输出/output.srt', 'w', encoding='utf-8') as f:
                 f.writelines(srtlines)
 
+    def _save_voice_model(self, model_input, prompt_speech_16k, text_ref=None, save_path='output.pt'):
+        """保存音色模型到文件
+        Args:
+            model_input: 包含音色信息的模型输入
+            prompt_speech_16k: 参考音频
+            text_ref: 参考文本（可选）
+            save_path: 保存路径，默认为output.pt
+        """
+        model_input['audio_ref'] = prompt_speech_16k
+        if text_ref is not None:
+            model_input['text_ref'] = text_ref
+        
+        torch.save(model_input, save_path)
+
     def inference_zero_shot(self, tts_text, prompt_text, prompt_speech_16k, stream=False, speed=1.0, text_frontend=True):
         prompt_text = self.frontend.text_normalize(prompt_text, split=False, text_frontend=text_frontend)
-        for i in tqdm(self.frontend.text_normalize(tts_text, split=True, text_frontend=text_frontend)):
+        
+        # 先获取所有分段，找出最长的一段
+        text_segments = list(self.frontend.text_normalize(tts_text, split=True, text_frontend=text_frontend))
+        longest_segment = max(text_segments, key=len)
+        longest_idx = text_segments.index(longest_segment)
+        
+        for idx, i in enumerate(tqdm(text_segments)):
             if (not isinstance(i, Generator)) and len(i) < 0.5 * len(prompt_text):
                 logging.warning('synthesis text {} too short than prompt text {}, this may lead to bad performance'.format(i, prompt_text))
             model_input = self.frontend.frontend_zero_shot(i, prompt_text, prompt_speech_16k, self.sample_rate)
             start_time = time.time()
             logging.info('synthesis text {}'.format(i))
 
-            # 添加audio_ref和text_ref字段
-            model_input['audio_ref'] = prompt_speech_16k
-            model_input['text_ref'] = prompt_text
-            
-            # 保存数据
-            torch.save(model_input, 'output.pt')
+            if idx == longest_idx:  # 使用最长的文本段保存音色模型
+                self._save_voice_model(model_input, prompt_speech_16k, prompt_text)
 
             for model_output in self.model.tts(**model_input, stream=stream, speed=speed):
                 speech_len = model_output['tts_speech'].shape[1] / self.sample_rate
-                logging.info('yield speech len {}, rtf {}'.format(speech_len, (time.time() - start_time) / speech_len))
+                logging.info('yield speech len {}, rtf {}, abs mean {}, std {}'.format(
+                    speech_len, 
+                    (time.time() - start_time) / speech_len, 
+                    model_output['tts_speech'].abs().mean(), 
+                    model_output['tts_speech'].std()
+                ))
                 yield model_output
                 start_time = time.time()
 
     def inference_cross_lingual(self, tts_text, prompt_speech_16k, stream=False, speed=1.0, text_frontend=True):
-        for i in tqdm(self.frontend.text_normalize(tts_text, split=True, text_frontend=text_frontend)):
+        # 先获取所有分段，找出最长的一段
+        text_segments = list(self.frontend.text_normalize(tts_text, split=True, text_frontend=text_frontend))
+        longest_segment = max(text_segments, key=len)
+        longest_idx = text_segments.index(longest_segment)
+        
+        for idx, i in enumerate(tqdm(text_segments)):
             model_input = self.frontend.frontend_cross_lingual(i, prompt_speech_16k, self.sample_rate)
             start_time = time.time()
             logging.info('synthesis text {}'.format(i))
+            
+            if idx == longest_idx:  # 使用最长的文本段保存音色模型
+                self._save_voice_model(model_input, prompt_speech_16k)
+
             for model_output in self.model.tts(**model_input, stream=stream, speed=speed):
                 speech_len = model_output['tts_speech'].shape[1] / self.sample_rate
                 logging.info('yield speech len {}, rtf {}'.format(speech_len, (time.time() - start_time) / speech_len))
@@ -222,6 +244,7 @@ class CosyVoice2(CosyVoice):
 
     def __init__(self, model_dir, load_jit=False, load_trt=False, fp16=False):
         self.instruct = True if '-Instruct' in model_dir else False
+        self.is_05b = True if 'CosyVoice2-0.5B' in model_dir else False
         self.model_dir = model_dir
         self.fp16 = fp16
         if not os.path.exists(model_dir):
