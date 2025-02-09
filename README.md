@@ -1,12 +1,23 @@
 [![SVG Banners](https://svg-banners.vercel.app/api?type=origin&text1=CosyVoice🤠&text2=Text-to-Speech%20💖%20Large%20Language%20Model&width=800&height=210)](https://github.com/Akshay090/svg-banners)
 
+## 启动
+```bash
+conda create -n cosyvoice -y python=3.10
+conda activate cosyvoice
+pip install -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple/ --trusted-host=mirrors.aliyun.com
+
+python webui.py
+```
+
 ## 接口地址
 
 [示例指令](./示例指令.html)
-```
+```bash
 python api.py
 
-http://localhost:9880/?text=等我这边<strong>接好</strong>后[laughter]给到游戏，他们再提供[breath]测试环境吧&speaker=嘉然&instruct=郑州话，快速
+http://localhost:9880/?text=春日清晨，老街深处飘来阵阵豆香。三代传承的手艺，将金黄的豆浆熬制成最纯粹的味道。一碗温热的豆腐脑，不仅是早餐，更是儿时难忘的记忆，是岁月沉淀的生活智慧。&speaker=舌尖上的中国
+
+http://localhost:9880/?text=hello%20hello~%20[breath]%20听得到吗？%20きこえていますか？%20初次见面，请多关照呀！%20这里是嘉然Diana，大家也可以叫我<strong>蒂娜</strong>%20是你们最甜甜甜的小草莓&speaker=嘉然&instruct=慢速，用可爱的语气说
 ```
 
 ## 👉🏻 CosyVoice 👈🏻

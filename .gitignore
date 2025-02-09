@@ -52,3 +52,6 @@ pretrained_models/*
 *.tar
 
 output.pt
+音频输出
+
+.history
