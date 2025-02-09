@@ -324,7 +324,7 @@ def main():
         prompt_wav_upload.change(fn=prompt_wav_recognition, inputs=[prompt_wav_upload], outputs=[prompt_text])
         prompt_wav_record.change(fn=prompt_wav_recognition, inputs=[prompt_wav_record], outputs=[prompt_text])
     demo.queue(max_size=4, default_concurrency_limit=2)
-    demo.launch(server_name='0.0.0.0', server_port=args.port)
+    demo.launch(server_name='0.0.0.0', server_port=args.port, inbrowser=args.open)
 
 
 if __name__ == '__main__':
@@ -336,6 +336,7 @@ if __name__ == '__main__':
                         type=str,
                         default='pretrained_models/CosyVoice2-0.5B',
                         help='local path or modelscope repo id')
+    parser.add_argument('--open', action='store_true', help='open in browser')
     args = parser.parse_args()
     try:
         cosyvoice = CosyVoice(args.model_dir)

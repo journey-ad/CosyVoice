@@ -55,3 +55,5 @@ output.pt
 音频输出
 
 .history
+.build_temp
+!tools/build_portable.ps1
