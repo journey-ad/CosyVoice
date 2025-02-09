@@ -1,9 +1,21 @@
-[![SVG Banners](https://svg-banners.vercel.app/api?type=origin&text1=CosyVoice🤠&text2=Text-to-Speech%20💖%20Large%20Language%20Model&width=800&height=210)](https://github.com/Akshay090/svg-banners)
+<p align="center">
+  <a href="https://github.com/Akshay090/svg-banners" target="_blank">
+    <img alt="SVG Banners" src="https://svg-banners.vercel.app/api?type=origin&text1=CosyVoice🤠&text2=Text-to-Speech%20💖%20Large%20Language%20Model&width=800&height=210">
+  </a>
+</p>
+<p align="center">
+  <a href="https://count.getloli.com" target="_blank">
+    <img alt="CosyVoice2-Ex" src="https://count.getloli.com/@CosyVoice2-Ex.github?name=CosyVoice2-Ex.github&theme=3d-num&padding=7&offset=0&align=top&scale=1&pixelated=1&darkmode=auto">
+  </a>
+</p>
 
 ## 启动
+
+[Modelscope](https://www.modelscope.cn/studios/journey0ad/CosyVoice2-Ex)
 ```bash
 conda create -n cosyvoice -y python=3.10
 conda activate cosyvoice
+conda install -y -c conda-forge pynini==2.1.5
 pip install -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple/ --trusted-host=mirrors.aliyun.com
 
 python webui.py
